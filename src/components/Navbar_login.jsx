@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import {
-  FaSearch,
   FaCalendarAlt,
   FaShoppingCart,
   FaUserCircle,
-  FaBars,
   FaTimes
 } from 'react-icons/fa';
 import { Link } from 'react-router-dom';

@@ -104,7 +104,7 @@ export default function Dashboard() {
   const [initializing, setInitializing] = useState(true);
   const [time, setTime] = useState(new Date());
   const [graphView, setGraphView] = useState("daily");
-  const [graphData, setGraphData] = useState(generateGraphData());
+  const [graphData] = useState(generateGraphData());
 
   useEffect(() => {
     const init = async () => {

@@ -119,18 +119,7 @@ const ViewMoreModal = ({ isOpen, onClose, property }) => {
 
 
 const AddPropertyModal = ({ isOpen, onClose, onSubmit, formData, setFormData, formErrors }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      await onSubmit(e);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const [isSubmitting] = useState(false);
 
   if (!isOpen) return null;
 
@@ -318,19 +307,8 @@ const AddPropertyModal = ({ isOpen, onClose, onSubmit, formData, setFormData, fo
 };
 
 const AddRoomModal = ({ isOpen, onClose, onSubmit, formData, setFormData, formErrors }) => {
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting] = useState(false);
   if (!isOpen) return null;
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    try {
-      await onSubmit(e);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const handleChange = (e) => {
     const { name, value, type, checked, files } = e.target;
@@ -486,11 +464,10 @@ const AddRoomModal = ({ isOpen, onClose, onSubmit, formData, setFormData, formEr
 
 
 export default function Guests() {
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [confirmRoomDelete, setConfirmRoomDelete] = useState({ room: null, open: false });
   const [editingRoom, setEditingRoom] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ property: null, open: false });
-  const [showEditModal ,setShowEditModal] = useState(false);
+  const [setShowEditModal] = useState(false);
   const [editingProperty, setEditingProperty] = useState(null);
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [metrics, setMetrics] = useState({
@@ -803,12 +780,12 @@ export default function Guests() {
             <div className="col-span-2 flex flex-wrap gap-2">
               {(formData.room_images || []).map((url, i) => (
                 <div key={i} className="relative">
-                  <img src={`${process.env.REACT_APP_API_URL}${url}`} className="h-20 w-20 object-cover rounded" />
+                  <img src={`${process.env.REACT_APP_API_URL}${url}`} className="h-20 w-20 object-cover rounded" alt="Property preview" />
                   <button onClick={() => handleRemoveImage(i)} className="absolute top-0 right-0 w-5 h-5 bg-red-500 text-white text-xs rounded-full">×</button>
                 </div>
               ))}
               {previewImages.map((img, i) => (
-                <img key={`new-${i}`} src={img.preview} className="h-20 w-20 object-cover rounded" />
+                <img key={`new-${i}`} src={img.preview} className="h-20 w-20 object-cover rounded"  alt="Property preview"/>
               ))}
             </div>
   
@@ -1032,7 +1009,7 @@ export default function Guests() {
             <div className="flex flex-wrap gap-2 col-span-2">
               {formData.thumbnail_url.map((url, idx) => (
                 <div key={idx} className="relative">
-                  <img src={`${process.env.REACT_APP_API_URL}${url}`} className="h-20 w-20 object-cover rounded" />
+                  <img src={`${process.env.REACT_APP_API_URL}${url}`} className="h-20 w-20 object-cover rounded"  alt="Property preview"/>
                   <button
                     onClick={() => handleRemoveImage(idx)}
                     className="absolute top-0 right-0 bg-red-500 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center"
@@ -1042,7 +1019,7 @@ export default function Guests() {
   
               {previewImages.map((file, idx) => (
                 <div key={`preview-${idx}`} className="relative">
-                  <img src={file.preview} className="h-20 w-20 object-cover rounded" />
+                  <img src={file.preview} className="h-20 w-20 object-cover rounded"  alt="Property preview"/>
                   <button
                     onClick={() => {
                       setPreviewImages(prev => prev.filter((_, i) => i !== idx));

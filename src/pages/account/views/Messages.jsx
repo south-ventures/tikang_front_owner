@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 
 const Messages = () => {
@@ -18,7 +18,7 @@ const Messages = () => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  const fetchMessages = async () => {
+  const fetchMessages = useCallback(async () => {
     if (!user) return;
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL_MESSAGE}/conversations/${user.user_id}`);
@@ -46,7 +46,6 @@ const Messages = () => {
 
       setGroupedMessages(grouped);
 
-      // ✅ Only set activeUserId if it's not already set
       if (!activeUserId) {
         const firstUserId = Object.keys(grouped)[0];
         if (firstUserId) setActiveUserId(firstUserId);
@@ -54,11 +53,7 @@ const Messages = () => {
     } catch (err) {
       console.error('Failed to load messages:', err);
     }
-  };
-
-  useEffect(() => {
-    fetchMessages();
-  }, [user]);
+  }, [user, activeUserId]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });

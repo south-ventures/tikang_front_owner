@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import Modal from '../../../components/Modal';
 import LoadingSpinner from '../../../components/LoadingSpinner';
@@ -15,7 +15,7 @@ const TikangCash = () => {
   const API_URL = process.env.REACT_APP_API_URL_GUEST;
   const API_URL_OWNER = process.env.REACT_APP_API_URL_OWNER;
 
-  const fetchUserData = async () => {
+  const fetchUserData = useCallback(async () => {
     try {
       const token = localStorage.getItem('tikangToken');
       const res = await fetch(`${API_URL}/me`, {
@@ -30,7 +30,7 @@ const TikangCash = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [API_URL, setUser]);
 
   const fetchAdminQR = async () => {
     try {
@@ -98,7 +98,7 @@ const TikangCash = () => {
 
   useEffect(() => {
     fetchUserData();
-  }, []);
+  }, [fetchUserData]);
 
   const formatCurrency = (val) =>
     new Intl.NumberFormat('en-PH', {

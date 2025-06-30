@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback, useMemo   } from "react";
 import {
   FaCheckCircle,
   FaHistory,
@@ -16,8 +16,6 @@ import LoadingSpinner from "../../components/LoadingSpinner";
 import { format } from "date-fns";
 import Calendar from 'react-calendar';
 import 'react-calendar/dist/Calendar.css';
-import WarningPopup from '../../components/WarningPopup';
-import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 const MetricCard = ({ icon, label, value, color }) => (
@@ -273,8 +271,6 @@ export default function Bookings() {
   const [search, setSearch] = useState("");
   const navigate = useNavigate();
   const [lastCheck, setLastCheck] = useState(Date.now());
-
-  const [calendarBookings, setCalendarBookings] = useState([]);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   const handleDateChange = (date) => {
@@ -296,6 +292,70 @@ export default function Bookings() {
     }
     return null;
   };
+
+  const loadBookings = async (lessorId) => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL_OWNER}/bookings/lessor/${lessorId}`);
+      const data = await res.json();
+      setBookings(Array.isArray(data) ? data : data?.bookings || []);
+    } catch (err) {
+      console.error("Error loading bookings:", err);
+      setBookings([]);
+    }
+  };
+
+  const now = useMemo(() => new Date(), []);
+
+  const matchesSearch = useCallback(
+    (b) => {
+      const q = search.toLowerCase();
+      return (
+        b.full_name?.toLowerCase().includes(q) ||
+        b.title?.toLowerCase().includes(q)
+      );
+    },
+    [search]
+  );
+
+  const getUpcomingBookings = useCallback(() =>
+    bookings.filter(b =>
+      new Date(b.check_in_date) > now &&
+      b.booking_status !== 'cancelled' &&
+      matchesSearch(b)
+    ),
+    [bookings, now, matchesSearch]
+  );
+  
+  const getOngoingBookings = useCallback(() =>
+    bookings.filter(b => {
+      const checkIn = new Date(b.check_in_date);
+      const checkOut = new Date(b.check_out_date);
+      return (
+        checkIn <= now &&
+        checkOut >= now &&
+        b.booking_status !== 'cancelled' &&
+        matchesSearch(b)
+      );
+    }),
+    [bookings, now, matchesSearch]
+  );
+  
+  const getCompletedBookings = useCallback(() =>
+    bookings.filter(b =>
+      new Date(b.check_out_date) < now &&
+      b.booking_status === 'completed' &&
+      matchesSearch(b)
+    ),
+    [bookings, now, matchesSearch]
+  );
+  
+  const getCancelledBookings = useCallback(() =>
+    bookings.filter(b =>
+      b.booking_status === 'cancelled' &&
+      matchesSearch(b)
+    ),
+    [bookings, matchesSearch]
+  );
 
   useEffect(() => {
     const init = async () => {
@@ -338,61 +398,7 @@ export default function Bookings() {
     console.log("Ongoing:", getOngoingBookings());
     console.log("Completed:", getCompletedBookings());
     console.log("Cancelled:", getCancelledBookings());
-  }, [bookings]);
-  
-
-  const loadBookings = async (lessorId) => {
-    try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL_OWNER}/bookings/lessor/${lessorId}`);
-      const data = await res.json();
-      setBookings(Array.isArray(data) ? data : data?.bookings || []);
-    } catch (err) {
-      console.error("Error loading bookings:", err);
-      setBookings([]);
-    }
-  };
-
-  const now = new Date();
-
-  const matchesSearch = (b) => {
-    const q = search.toLowerCase();
-    return (
-      b.full_name?.toLowerCase().includes(q) ||
-      b.title?.toLowerCase().includes(q)
-    );
-  };
-
-  const getUpcomingBookings = () =>
-    bookings.filter(b =>
-      new Date(b.check_in_date) > now &&
-      b.booking_status !== 'cancelled' &&
-      matchesSearch(b)
-    );
-  
-  const getOngoingBookings = () =>
-    bookings.filter(b => {
-      const checkIn = new Date(b.check_in_date);
-      const checkOut = new Date(b.check_out_date);
-      return (
-        checkIn <= now &&
-        checkOut >= now &&
-        b.booking_status !== 'cancelled' &&
-        matchesSearch(b)
-      );
-    });
-  
-  const getCompletedBookings = () =>
-    bookings.filter(b =>
-      new Date(b.check_out_date) < now &&
-      b.booking_status === 'completed' &&
-      matchesSearch(b)
-    );
-  
-  const getCancelledBookings = () =>
-    bookings.filter(b =>
-      b.booking_status === 'cancelled' &&
-      matchesSearch(b)
-    );
+  }, [bookings, getCancelledBookings,getCompletedBookings, getOngoingBookings, getUpcomingBookings]);
 
     const [tableFilters, setTableFilters] = useState({
       upcoming: true,
