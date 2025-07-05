@@ -1,136 +1,111 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
-import {
-  FaComments
-} from "react-icons/fa";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-} from "recharts";
-import { motion } from "framer-motion";
-import { format, subDays, subWeeks, startOfWeek, endOfWeek, subMonths } from "date-fns";
 import DashboardNavBar from "../../components/Navbar";
 import DashboardTabs from "../dashboard/DashboardTabs";
 import LoadingSpinner from "../../components/LoadingSpinner";
-
-// 🧠 Utilities to generate real date labels
-const getDailyLabels = () =>
-  [...Array(7)].map((_, i) => format(subDays(new Date(), 6 - i), "MMM d"));
-
-const getWeeklyLabels = () =>
-  [...Array(4)].map((_, i) => {
-    const start = startOfWeek(subWeeks(new Date(), 3 - i), { weekStartsOn: 1 });
-    const end = endOfWeek(start, { weekStartsOn: 1 });
-    return `${format(start, "MMM d")}-${format(end, "MMM d")}`;
-  });
-
-const getMonthlyLabels = () =>
-  [...Array(4)].map((_, i) => format(subMonths(new Date(), 3 - i), "MMM yyyy"));
-
-// 🎯 Dynamic Graph Data based on real dates
-const generateGraphData = () => {
-  const dailyLabels = getDailyLabels();
-  const weeklyLabels = getWeeklyLabels();
-  const monthlyLabels = getMonthlyLabels();
-
-  return {
-    daily: {
-      sales: dailyLabels.map(label => ({ label, sales: rand(400, 800) })),
-      occupancy: [
-        { name: "Booked", value: 18 },
-        { name: "Available", value: 15 }
-      ],
-      revenueTrend: dailyLabels.map(label => ({ label, revenue: rand(900, 1500) })),
-      expenses: dailyLabels.map(label => ({
-        label,
-        revenue: rand(900, 1500),
-        expenses: rand(400, 900)
-      })),
-      topProperties: [
-        { name: "Palm Grove", revenue: 900 },
-        { name: "Ocean Breeze", revenue: 850 },
-      ]
-    },
-    weekly: {
-      sales: weeklyLabels.map(label => ({ label, sales: rand(2500, 4000) })),
-      occupancy: [
-        { name: "Booked", value: 21 },
-        { name: "Available", value: 12 }
-      ],
-      revenueTrend: weeklyLabels.map(label => ({ label, revenue: rand(4000, 6000) })),
-      expenses: weeklyLabels.map(label => ({
-        label,
-        revenue: rand(4000, 6000),
-        expenses: rand(2500, 4000)
-      })),
-      topProperties: [
-        { name: "Sunset Villa", revenue: 3100 },
-        { name: "Palm Grove", revenue: 2900 },
-      ]
-    },
-    monthly: {
-      sales: monthlyLabels.map(label => ({ label, sales: rand(4000, 6000) })),
-      occupancy: [
-        { name: "Booked", value: 90 },
-        { name: "Available", value: 40 }
-      ],
-      revenueTrend: monthlyLabels.map(label => ({ label, revenue: rand(6000, 8500) })),
-      expenses: monthlyLabels.map(label => ({
-        label,
-        revenue: rand(6000, 8500),
-        expenses: rand(3500, 5000)
-      })),
-      topProperties: [
-        { name: "Green Lodge", revenue: 3900 },
-        { name: "Ocean Breeze", revenue: 3400 },
-      ]
-    }
-  };
-};
-
-// 🔢 Random helper
-const rand = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+import { motion } from "framer-motion";
+import { format } from "date-fns";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
 export default function Dashboard() {
-  const { user, loading, fetchUser } = useAuth();
+  const { user, setUser, validateToken, storeToken } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [initializing, setInitializing] = useState(true);
   const [time, setTime] = useState(new Date());
-  const [graphView, setGraphView] = useState("daily");
-  const [graphData] = useState(generateGraphData());
+  const [dashboardData, setDashboardData] = useState(null);
 
   useEffect(() => {
     const init = async () => {
-      if (!user && !loading) {
-        const fetched = await fetchUser();
-        if (!fetched) navigate("/login");
+      try {
+        const searchParams = new URLSearchParams(location.search);
+        const queryToken = searchParams.get("token");
+
+        if (queryToken) {
+          const res = await fetch(`${process.env.REACT_APP_API_URL_OWNER}/validate-token`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: queryToken }),
+          });
+
+          if (!res.ok) throw new Error("Token validation failed");
+
+          const data = await res.json();
+          storeToken(queryToken);
+          setUser(data.user);
+          navigate("/dashboard", { replace: true });
+          return;
+        }
+
+        const validatedUser = await validateToken();
+        if (!validatedUser) return navigate("/login");
+      } catch (err) {
+        console.error("Auth failed:", err);
+        localStorage.removeItem("tikangToken");
+        setUser(null);
+        navigate("/login");
+      } finally {
+        setInitializing(false);
       }
-      setInitializing(false);
     };
+
     init();
-  }, [user, loading, fetchUser, navigate]);
+  }, [location.search, navigate, setUser, storeToken, validateToken]);
 
   useEffect(() => {
     const interval = setInterval(() => setTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  if (loading || initializing || !user) {
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        const res = await fetch(`${process.env.REACT_APP_API_URL_OWNER}/dashboard/${user?.user_id}`);
+        const data = await res.json();
+        setDashboardData(data);
+      } catch (err) {
+        console.error("Error fetching dashboard data:", err);
+      }
+    };
+
+    if (user?.user_id) fetchDashboardData();
+  }, [user?.user_id]);
+
+  const getBookingChartData = () => {
+    if (!dashboardData?.allBookings) return [];
+
+    const daily = {};
+    for (let i = 6; i >= 0; i--) {
+      const date = format(new Date(Date.now() - i * 86400000), "yyyy-MM-dd");
+      daily[date] = 0;
+    }
+
+    dashboardData.allBookings.forEach((b) => {
+      const date = format(new Date(b.created_at), "yyyy-MM-dd");
+      if (daily[date] !== undefined) {
+        daily[date]++;
+      }
+    });
+
+    return Object.entries(daily).map(([date, count]) => ({ date, count }));
+  };
+
+  if (initializing || !user || !dashboardData) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
         <LoadingSpinner />
       </div>
     );
   }
-
-  const data = graphData[graphView];
 
   return (
     <>
@@ -140,131 +115,117 @@ export default function Dashboard() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.8 }}
-        className="pt-36 pb-16 px-8 bg-gray-100 min-h-screen"
+        className="pt-36 pb-16 px-6 md:px-12 bg-gray-100 min-h-screen"
       >
-        {/* Header */}
-        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between pl-2">
+        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-gray-800">
+            <h2 className="text-3xl font-bold text-gray-800 mb-1">
               Welcome, {user?.full_name?.split(" ")[0] || "Homeowner"} 👋
             </h2>
             <p className="text-sm text-gray-500">
               {format(time, "EEEE, MMMM d, yyyy")} — {format(time, "hh:mm:ss a")}
             </p>
           </div>
-          <div className="flex gap-2 mt-4 md:mt-0">
-            {["daily", "weekly", "monthly"].map((view) => (
-              <button
-                key={view}
-                onClick={() => setGraphView(view)}
-                className={`px-4 py-1 rounded-full text-sm font-medium border transition shadow ${
-                  graphView === view
-                    ? "bg-green-500 text-white"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-100"
-                }`}
-              >
-                {view.charAt(0).toUpperCase() + view.slice(1)}
-              </button>
-            ))}
+        </div>
+
+        {/* Metric Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+          <div className="bg-white shadow-lg rounded-xl p-5 border border-gray-100">
+            <h4 className="text-gray-500 text-sm mb-1">Tikang Cash</h4>
+            <p className="text-2xl font-bold text-green-600">₱{Number(user.tikang_cash || 0).toFixed(2)}</p>
+          </div>
+          <div className="bg-white shadow-lg rounded-xl p-5 border border-gray-100">
+            <h4 className="text-gray-500 text-sm mb-1">Total Bookings</h4>
+            <p className="text-2xl font-bold text-gray-700">{dashboardData.allBookings.length}</p>
+          </div>
+          <div className="bg-white shadow-lg rounded-xl p-5 border border-gray-100">
+            <h4 className="text-gray-500 text-sm mb-1">New Bookings (7d)</h4>
+            <p className="text-2xl font-bold text-blue-600">{dashboardData.newBookings.length}</p>
+          </div>
+          <div className="bg-white shadow-lg rounded-xl p-5 border border-gray-100">
+            <h4 className="text-gray-500 text-sm mb-1">Total Revenue</h4>
+            <p className="text-2xl font-bold text-indigo-600">
+              ₱{Number(dashboardData.totalRevenue || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+            </p>
           </div>
         </div>
 
-        {/* Graph Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <motion.div layout className="lg:col-span-2">
-            <GraphCard title={`Sales (${graphView})`} bg="bg-blue-50">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data.sales}>
-                  <XAxis dataKey="label" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="sales" fill="#3B82F6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </GraphCard>
-          </motion.div>
-
-          <motion.div layout className="lg:col-span-1">
-            <GraphCard title="Room Occupancy Rate" bg="bg-green-50">
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie
-                    data={data.occupancy}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={70}
-                    label
-                    fill="#10B981"
-                  />
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
-            </GraphCard>
-          </motion.div>
-
-          <motion.div layout className="lg:col-span-2">
-            <GraphCard title="Monthly Revenue Trend" bg="bg-indigo-50">
-              <ResponsiveContainer width="100%" height={220}>
-                <BarChart data={data.revenueTrend}>
-                  <XAxis dataKey="label" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="revenue" fill="#10B981" />
-                </BarChart>
-              </ResponsiveContainer>
-            </GraphCard>
-          </motion.div>
-
-          <motion.div layout className="lg:col-span-1">
-            <GraphCard title="Revenue vs Expenses" bg="bg-red-50">
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data.expenses}>
-                  <XAxis dataKey="label" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="revenue" fill="#3B82F6" />
-                  <Bar dataKey="expenses" fill="#10B981" />
-                </BarChart>
-              </ResponsiveContainer>
-            </GraphCard>
-          </motion.div>
-
-          <motion.div layout className="lg:col-span-3">
-            <GraphCard title="Top Performing Properties" bg="bg-yellow-50">
-              <ResponsiveContainer width="100%" height={250}>
-                <BarChart data={data.topProperties} layout="vertical">
-                  <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" />
-                  <Tooltip />
-                  <Bar dataKey="revenue" fill="#3B82F6" />
-                </BarChart>
-              </ResponsiveContainer>
-            </GraphCard>
-          </motion.div>
+        {/* Booking Graph */}
+        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-12">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Daily Bookings (Last 7 Days)</h3>
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={getBookingChartData()}>
+              <defs>
+                <linearGradient id="colorBookings" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.8} />
+                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" />
+              <YAxis />
+              <CartesianGrid strokeDasharray="3 3" />
+              <Tooltip />
+              <Area type="monotone" dataKey="count" stroke="#6366f1" fillOpacity={1} fill="url(#colorBookings)" />
+            </AreaChart>
+          </ResponsiveContainer>
         </div>
 
-        {/* Floating Chat Button */}
-        <motion.button
-          whileHover={{ scale: 1.1 }}
-          whileTap={{ scale: 0.95 }}
-          className="fixed bottom-6 right-6 bg-green-500 hover:bg-green-600 text-white p-4 rounded-full shadow-2xl z-50"
-        >
-          <FaComments size={24} />
-        </motion.button>
+        {/* Recent Bookings Table */}
+        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100 mb-12">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Recent Bookings</h3>
+          <div className="overflow-auto rounded-lg">
+            <table className="w-full text-sm text-left text-gray-700">
+              <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                <tr>
+                  <th className="px-4 py-2">Guest</th>
+                  <th className="px-4 py-2">Property</th>
+                  <th className="px-4 py-2">Check-in</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2 text-right">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboardData.allBookings.slice(0, 5).map((booking) => (
+                  <tr key={booking.booking_id} className="border-b hover:bg-gray-50">
+                    <td className="px-4 py-2">{booking.guest_name}</td>
+                    <td className="px-4 py-2">{booking.property_title}</td>
+                    <td className="px-4 py-2">{format(new Date(booking.check_in_date), "MMM d, yyyy")}</td>
+                    <td className="px-4 py-2 capitalize">{booking.booking_status}</td>
+                    <td className="px-4 py-2 text-right font-semibold text-green-700">
+                      ₱{Number(booking.total_price || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Upcoming Guests Table */}
+        <div className="bg-white p-6 rounded-xl shadow-md border border-gray-100">
+          <h3 className="text-lg font-semibold text-gray-700 mb-4">Upcoming Guests</h3>
+          <div className="overflow-auto rounded-lg">
+            <table className="w-full text-sm text-left text-gray-700">
+              <thead className="bg-gray-100 text-gray-600 uppercase text-xs">
+                <tr>
+                  <th className="px-4 py-2">Name</th>
+                  <th className="px-4 py-2">Email</th>
+                  <th className="px-4 py-2">Phone</th>
+                </tr>
+              </thead>
+              <tbody>
+                {dashboardData.upcomingGuests.map((guest) => (
+                  <tr key={guest.user_id} className="border-b hover:bg-gray-50">
+                    <td className="px-4 py-2">{guest.full_name}</td>
+                    <td className="px-4 py-2">{guest.email}</td>
+                    <td className="px-4 py-2">{guest.phone}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </motion.div>
     </>
   );
 }
-
-// 📦 GraphCard Component
-const GraphCard = ({ title, bg = "bg-white", children }) => (
-  <motion.div
-    whileHover={{ scale: 1.01 }}
-    className={`${bg} p-6 rounded-3xl shadow-2xl transition-all duration-300`}
-  >
-    <h3 className="text-lg font-semibold mb-4 text-gray-700">{title}</h3>
-    {children}
-  </motion.div>
-);

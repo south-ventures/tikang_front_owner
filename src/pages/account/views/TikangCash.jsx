@@ -11,10 +11,12 @@ const TikangCash = () => {
   const [amount, setAmount] = useState('');
   const [adminQR, setAdminQR] = useState('');
   const [receiptImage, setReceiptImage] = useState(null);
+  const [transactions, setTransactions] = useState([]);
 
   const API_URL = process.env.REACT_APP_API_URL_GUEST;
   const API_URL_OWNER = process.env.REACT_APP_API_URL_OWNER;
 
+  // fetchUserData with useCallback
   const fetchUserData = useCallback(async () => {
     try {
       const token = localStorage.getItem('tikangToken');
@@ -32,6 +34,7 @@ const TikangCash = () => {
     }
   }, [API_URL, setUser]);
 
+  // fetchAdminQR remains same
   const fetchAdminQR = async () => {
     try {
       const token = localStorage.getItem('tikangToken');
@@ -47,46 +50,72 @@ const TikangCash = () => {
     }
   };
 
+  // Wrap fetchTransactions in useCallback, depends on user?.user_id
+  const fetchTransactions = useCallback(async () => {
+    if (!user?.user_id) return; // safety check
+
+    try {
+      const token = localStorage.getItem('tikangToken');
+      const res = await fetch(`${API_URL_OWNER}/wallet-transactions?user_id=${user.user_id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (Array.isArray(data.transactions)) {
+        setTransactions(data.transactions);
+      }
+    } catch (error) {
+      console.error('Failed to fetch wallet transactions:', error);
+    }
+  }, [API_URL_OWNER, user?.user_id]);
+
+  // Effects
+  useEffect(() => {
+    fetchUserData();
+  }, [fetchUserData]);
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [fetchTransactions]);
+
+
   const handleSubmitTransaction = async () => {
     if (!amount || isNaN(amount) || Number(amount) <= 0) {
       alert('Please enter a valid amount.');
       return;
     }
-  
+
     const formData = new FormData();
     formData.append('user_id', user.user_id);
-    formData.append('type', transactionType.toLowerCase()); // 'deposit' or 'withdraw'
+    formData.append('type', transactionType.toLowerCase());
     formData.append('amount', amount);
     formData.append('status', 'pending');
     formData.append('method', 'gcash');
-  
+
     if (transactionType === 'Deposit') {
       if (!receiptImage) {
         alert('Please upload your GCash receipt.');
         return;
       }
-      formData.append('reference', receiptImage); // file
+      formData.append('reference', receiptImage);
     } else {
-      // for withdraw, attach a placeholder if needed
-      formData.append('reference', ''); // or your own server logic can handle null
+      formData.append('reference', '');
     }
-  
+
     try {
       const token = localStorage.getItem('tikangToken');
       const res = await fetch(`${API_URL_OWNER}/submit-wallet-transaction`, {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`
-        },
+        headers: { Authorization: `Bearer ${token}` },
         body: formData,
       });
-  
+
       const data = await res.json();
-  
+
       if (res.ok) {
         alert('Transaction submitted successfully and is now pending.');
         setModalOpen(false);
-        fetchUserData(); // refresh balance
+        fetchUserData();
+        fetchTransactions(); // refresh transaction list
       } else {
         alert(data?.message || 'Failed to submit transaction.');
       }
@@ -95,10 +124,6 @@ const TikangCash = () => {
       alert('Something went wrong while submitting the transaction.');
     }
   };
-
-  useEffect(() => {
-    fetchUserData();
-  }, [fetchUserData]);
 
   const formatCurrency = (val) =>
     new Intl.NumberFormat('en-PH', {
@@ -118,10 +143,10 @@ const TikangCash = () => {
   if (loading || !user) return <LoadingSpinner />;
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10">
+    <div className="max-w-4xl mx-auto px-4 py-10">
       <h1 className="text-2xl font-bold text-gray-800 mb-6">Tikang Cash Balance</h1>
 
-      <div className="bg-white shadow-md rounded-xl p-6 text-center">
+      <div className="bg-white shadow-md rounded-xl p-6 text-center mb-10">
         <p className="text-lg text-gray-600 mb-2">
           Hello, <span className="font-semibold">{user?.full_name}</span>
         </p>
@@ -146,6 +171,41 @@ const TikangCash = () => {
         </div>
       </div>
 
+      {/* Wallet Transactions List */}
+      <div className="bg-white shadow-md rounded-xl p-6">
+        <h2 className="text-lg font-bold text-gray-700 mb-4">Wallet Transactions</h2>
+        {transactions.length === 0 ? (
+          <p className="text-gray-500">No transactions found.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left text-gray-700">
+              <thead className="bg-gray-200 text-gray-600 uppercase text-xs">
+                <tr>
+                  <th className="px-4 py-2">Type</th>
+                  <th className="px-4 py-2">Amount</th>
+                  <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">Method</th>
+                  <th className="px-4 py-2">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactions.map((txn) => (
+                  <tr key={txn.transaction_id} className="border-b hover:bg-gray-100">
+                    <td className="px-4 py-2 capitalize">{txn.type}</td>
+                    <td className="px-4 py-2">{formatCurrency(txn.amount)}</td>
+                    <td className="px-4 py-2">{txn.status}</td>
+                    <td className="px-4 py-2 capitalize">{txn.method}</td>
+                    <td className="px-4 py-2">
+                      {new Date(txn.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       {/* Modal */}
       {isModalOpen && (
         <Modal onClose={() => setModalOpen(false)}>
@@ -168,7 +228,6 @@ const TikangCash = () => {
                 <p className="text-2xl font-bold text-green-600 mb-2">
                   {formatCurrency(user?.tikang_cash)}
                 </p>
-
                 <p className="text-sm mb-2">Your GCash QR:</p>
                 {user.gcash_qr ? (
                   <img
@@ -192,8 +251,10 @@ const TikangCash = () => {
                     <img
                       src={`${process.env.REACT_APP_API_URL}${adminQR}`}
                       alt="Admin GCash QR"
-                      className="mx-auto w-48 h-48 object-contain rounded cursor-pointer transition duration-300 hover:scale-105"
-                      onClick={() => window.open(`${process.env.REACT_APP_API_URL}${adminQR}`, '_blank')}
+                      className="mx-auto w-48 h-48 object-contain rounded cursor-pointer hover:scale-105 transition"
+                      onClick={() =>
+                        window.open(`${process.env.REACT_APP_API_URL}${adminQR}`, '_blank')
+                      }
                     />
                     <p className="text-xs text-gray-500 mt-1 italic">Click the image to zoom</p>
                   </>

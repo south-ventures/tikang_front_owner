@@ -134,7 +134,7 @@ const AddPropertyModal = ({ isOpen, onClose, onSubmit, formData, setFormData, fo
     }
   };
 
-  const propertyTypes = ["hotel", "apartment", "inn", "home", "condominium"];
+  const propertyTypes = ["hotel", "apartment", "inn", "house", "condominium"];
 
   return (
     <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center px-4">
@@ -463,7 +463,7 @@ const AddRoomModal = ({ isOpen, onClose, onSubmit, formData, setFormData, formEr
 
 
 
-export default function Guests() {
+export default function Properties() {
   const [confirmRoomDelete, setConfirmRoomDelete] = useState({ room: null, open: false });
   const [editingRoom, setEditingRoom] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState({ property: null, open: false });
@@ -486,7 +486,7 @@ export default function Guests() {
   const [formData, setFormData] = useState({
     title: "", address: "", type: "", price_per_night: "",
     price_day_use: "", max_rooms: "", amenities: "", is_day_use_available: false,
-    status: "active", city: "", province: "", country: "", images: []
+    status: "inactive", city: "", province: "", country: "", images: []
   });
   const [roomFormData, setRoomFormData] = useState({
     room_name: "",
@@ -520,18 +520,24 @@ export default function Guests() {
 
   useEffect(() => {
     const init = async () => {
+      let currentUser = user;
+  
       if (!user && !loading) {
-        const fetched = await fetchUser();
-        if (!fetched) return navigate("/login");
-        await loadProperties(fetched.userId);
-      } else if (user?.userId) {
-        await loadProperties(user.userId);
+        const fetchedUser = await fetchUser();
+        if (!fetchedUser) return navigate("/login");
+  
+        currentUser = fetchedUser;
       }
+  
+      if (currentUser?.user_id) {
+        await loadProperties(currentUser.user_id);
+      }
+  
       setInitializing(false);
     };
+  
     init();
   }, [user, loading, fetchUser, navigate]);
-
 
   const validateForm = () => {
     const required = [
@@ -945,7 +951,7 @@ export default function Guests() {
                 className="w-full border px-2 py-1 rounded"
               >
                 <option value="">Select type</option>
-                {["hotel", "apartment", "inn", "home", "condominium"].map((t) => (
+                {["hotel", "apartment", "inn", "house", "condominium"].map((t) => (
                   <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
                 ))}
               </select>
@@ -1145,6 +1151,7 @@ export default function Guests() {
       const res = await fetch(`${process.env.REACT_APP_API_URL_OWNER}/properties/lessor/${lessorId}`);
       const result = await res.json();
       setData(result);
+      console.log(result);
   
       // Group by property_id
       const grouped = result.reduce((acc, item) => {
@@ -1279,6 +1286,7 @@ export default function Guests() {
                 <th className="px-6 py-3 text-left">Status</th>
                 <th className="px-6 py-3 text-left">Max Rooms</th>
                 <th className="px-6 py-3 text-left">Price Per Night</th>
+                <th className="px-6 py-3 text-left">Verification</th>
                 <th className="px-6 py-3 text-left">Actions</th>
               </tr>
             </thead>
@@ -1299,21 +1307,30 @@ export default function Guests() {
                         className="sr-only peer"
                         checked={p.status === "active"}
                         onChange={async () => {
+                          if (p.is_verify !== "yes") {
+                            setPopup({
+                              message: "This property is not yet verified by admin. Please wait until verification is complete.",
+                              type: "warning",
+                            });
+                            return;
+                          }
+                        
                           const newStatus = p.status === "active" ? "inactive" : "active";
+                        
                           try {
                             const res = await fetch(`${process.env.REACT_APP_API_URL_OWNER}/switch-status/${p.property_id}`, {
                               method: "POST",
                               headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ status: newStatus })
+                              body: JSON.stringify({ status: newStatus }),
                             });
-
+                        
                             if (res.ok) {
                               let lessorId = user?.userId;
-
+                        
                               if (!lessorId) {
                                 const token = localStorage.getItem("tikangToken");
                                 const res = await fetch(`${process.env.REACT_APP_API_URL_OWNER}/me`, {
-                                  headers: { Authorization: `Bearer ${token}` }
+                                  headers: { Authorization: `Bearer ${token}` },
                                 });
                                 const data = await res.json();
                                 if (res.ok && data.user?.user_id) {
@@ -1323,7 +1340,7 @@ export default function Guests() {
                                   return;
                                 }
                               }
-
+                        
                               await loadProperties(lessorId);
                             } else {
                               console.error("Status update failed");
@@ -1360,6 +1377,15 @@ export default function Guests() {
                     <td className="px-6 py-4">{p.max_rooms}</td>
                     <td className="px-6 py-4 capitalize">₱{p.price_per_night}</td>
                     <td className="px-6 py-4">
+                      <span
+                        className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                          p.is_verify === "yes" ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+                        }`}
+                      >
+                        {p.is_verify === "yes" ? "Verified" : "Pending Verification"}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
                       <div className="flex flex-wrap gap-2">
                         <button
                           onClick={() => setSelectedProperty(p)}
@@ -1367,16 +1393,18 @@ export default function Guests() {
                         >
                           <FaChevronRight className="text-xs" /> View
                         </button>
-                        <button
-                          onClick={() => {
-                            setRoomFormData({ ...initialRoomFormData }); // reset form
-                            setTargetPropertyId(p.property_id); // store current property ID
-                            setShowAddRoomModal(true);
-                          }}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-800 hover:bg-green-200 rounded text-xs font-medium"
-                        >
-                          <FaBed className="text-xs" /> Add Room
-                        </button>
+                        {p.type !== "house" && (
+                          <button
+                            onClick={() => {
+                              setRoomFormData({ ...initialRoomFormData }); // reset form
+                              setTargetPropertyId(p.property_id); // store current property ID
+                              setShowAddRoomModal(true);
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-green-100 text-green-800 hover:bg-green-200 rounded text-xs font-medium"
+                          >
+                            <FaBed className="text-xs" /> Add Room
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setEditingProperty(p);
@@ -1439,7 +1467,7 @@ export default function Guests() {
                     </td>
                   </tr>
 
-                  {expanded[p.property_id] && (
+                  {expanded[p.property_id] && p.type !== "house" && (
                     <tr className="bg-gray-50">
                       <td colSpan="8" className="px-6 py-4">
                         {p.rooms.length === 0 ? (

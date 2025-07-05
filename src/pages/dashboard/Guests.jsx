@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  FaUserCheck,
-  FaUserClock,
   FaUsers,
   FaChevronRight,
   FaTimes,
-  FaSearch
+  FaSearch,
+  FaChevronDown
 } from "react-icons/fa";
 import DashboardNavBar from "../../components/Navbar";
 import DashboardTabs from "./DashboardTabs";
@@ -61,43 +60,96 @@ const GuestTable = ({ title, guests, onViewMore }) => (
 );
 
 const GuestDetailsModal = ({ guest, onClose, allBookings }) => {
+  const [expandedIndex, setExpandedIndex] = useState(null);
+
   if (!guest) return null;
   const bookings = allBookings[guest.customer_user_id] || [];
+
+  const toggleExpand = (index) => {
+    setExpandedIndex((prev) => (prev === index ? null : index));
+  };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-50 px-4">
       <div className="bg-white p-6 rounded-xl max-w-3xl w-full relative shadow-xl max-h-[90vh] overflow-y-auto">
-        <button onClick={onClose} className="absolute top-3 right-3 text-gray-600 hover:text-red-500">
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 text-gray-600 hover:text-red-500"
+        >
           <FaTimes size={20} />
         </button>
         <h2 className="text-2xl font-bold mb-4 text-gray-800">Guest Details</h2>
         <div className="grid grid-cols-2 gap-4 text-sm text-gray-700 mb-6">
-          <p><strong>Name:</strong> {guest.customer_name}</p>
-          <p><strong>Email:</strong> {guest.customer_email}</p>
-          <p><strong>Phone:</strong> {guest.customer_phone}</p>
-          <p><strong>Address:</strong> {guest.customer_address}</p>
-          <p><strong>Age:</strong> {guest.customer_age}</p>
+          <p>
+            <strong>Name:</strong> {guest.customer_name}
+          </p>
+          <p>
+            <strong>Email:</strong> {guest.customer_email}
+          </p>
+          <p>
+            <strong>Phone:</strong> {guest.customer_phone}
+          </p>
+          <p>
+            <strong>Address:</strong> {guest.customer_address}
+          </p>
+          <p>
+            <strong>Age:</strong> {guest.customer_age}
+          </p>
         </div>
 
         <h3 className="text-lg font-semibold mb-2">Booking History</h3>
         <div className="space-y-4 text-sm text-gray-700">
-          {bookings.map((b, i) => (
-            <div key={i} className="border-b pb-3">
-              <p><strong>Property:</strong> {b.property_title}</p>
-              <p><strong>Location:</strong> {b.property_city}, {b.property_province}, {b.property_country}</p>
-              <p><strong>Stay Type:</strong> {b.stay_type}</p>
-              <p><strong>Check-In:</strong> {format(new Date(b.check_in_date), "yyyy-MM-dd")}</p>
-              <p><strong>Check-Out:</strong> {format(new Date(b.check_out_date), "yyyy-MM-dd")}</p>
-              <p><strong>Total Price:</strong> ₱{b.total_price}</p>
-              <p><strong>Status:</strong> {b.booking_status}</p>
-              <p><strong>Payment:</strong> {b.payment_status}</p>
-            </div>
-          ))}
+          {bookings.map((b, i) => {
+            const isExpanded = expandedIndex === i;
+            return (
+              <div
+                key={i}
+                className="border rounded-md p-3 shadow-sm bg-gray-50"
+              >
+                <button
+                  onClick={() => toggleExpand(i)}
+                  className="w-full text-left flex items-center justify-between text-sm font-semibold text-gray-800"
+                >
+                  <span>
+                    {b.property_title} • {format(new Date(b.check_in_date), "MMM d")} - {format(new Date(b.check_out_date), "MMM d")}
+                  </span>
+                  {isExpanded ? <FaChevronDown /> : <FaChevronRight />}
+                </button>
+
+                {isExpanded && (
+                  <div className="mt-3 pl-2 text-gray-700 space-y-1">
+                    <p>
+                      <strong>Location:</strong> {b.property_city}, {b.property_province}, {b.property_country}
+                    </p>
+                    <p>
+                      <strong>Stay Type:</strong> {b.stay_type}
+                    </p>
+                    <p>
+                      <strong>Check-In:</strong> {format(new Date(b.check_in_date), "yyyy-MM-dd")}
+                    </p>
+                    <p>
+                      <strong>Check-Out:</strong> {format(new Date(b.check_out_date), "yyyy-MM-dd")}
+                    </p>
+                    <p>
+                      <strong>Total Price:</strong> ₱{b.total_price}
+                    </p>
+                    <p>
+                      <strong>Status:</strong> {b.booking_status}
+                    </p>
+                    <p>
+                      <strong>Payment:</strong> {b.payment_status}
+                    </p>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>
   );
 };
+
 
 export default function Guests() {
   const { user, fetchUser, loading } = useAuth();
@@ -119,33 +171,23 @@ export default function Guests() {
 
   useEffect(() => {
     const init = async () => {
+      let currentUser = user;
+
       if (!user && !loading) {
-        const fetched = await fetchUser();
-        if (!fetched) return navigate("/login");
-        await loadUserInformation(fetched.userId);
-      } else if (user?.userId) {
-        await loadUserInformation(user.userId);
+        const fetchedUser = await fetchUser();
+        if (!fetchedUser) return navigate("/login");
+        currentUser = fetchedUser;
       }
+
+      if (currentUser?.user_id) {
+        await loadUserInformation(currentUser.user_id);
+      }
+
       setInitializing(false);
     };
+
     init();
   }, [user, loading, fetchUser, navigate]);
-
-  const today = new Date();
-
-  const currentGuestsRaw = guests.filter(g =>
-    new Date(g.check_in_date) <= today &&
-    new Date(g.check_out_date) >= today &&
-    g.booking_status === "confirmed"
-  );
-
-  const completedGuestsRaw = guests.filter(g =>
-    new Date(g.check_out_date) < today && g.booking_status === "confirmed"
-  );
-
-  const cancelledGuestsRaw = guests.filter(g =>
-    new Date(g.check_out_date) < today && g.booking_status === "cancelled"
-  );
 
   const groupLatestByUser = (data) => {
     const grouped = {};
@@ -166,7 +208,6 @@ export default function Guests() {
     return acc;
   }, {});
 
-  // ⬇️ Search filtering
   const filterBySearch = (list) => {
     const query = searchQuery.toLowerCase();
     return list.filter(g =>
@@ -175,9 +216,7 @@ export default function Guests() {
     );
   };
 
-  const currentGuests = filterBySearch(groupLatestByUser(currentGuestsRaw));
-  const completedGuests = filterBySearch(groupLatestByUser(completedGuestsRaw));
-  const cancelledGuests = filterBySearch(groupLatestByUser(cancelledGuestsRaw));
+  const filteredGuests = filterBySearch(groupLatestByUser(guests));
 
   if (initializing || !user) {
     return (
@@ -193,7 +232,7 @@ export default function Guests() {
       <DashboardTabs />
       <div className="pt-36 px-6 pb-16 bg-gray-100 min-h-screen">
         <div className="flex items-center justify-between mb-6">
-          <h1 className="text-xl font-bold text-gray-700">Guest Overview</h1>
+          <h1 className="text-xl font-bold text-gray-700">All Guests</h1>
           <div className="relative">
             <input
               type="text"
@@ -208,14 +247,13 @@ export default function Guests() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
           <MetricCard icon={<FaUsers />} label="Total Guests" value={guests.length} color="blue" />
-          <MetricCard icon={<FaUserCheck />} label="Current Guests" value={currentGuests.length} color="green" />
-          <MetricCard icon={<FaUserClock />} label="Completed Guests" value={completedGuests.length} color="gray" />
-          <MetricCard icon={<FaTimes />} label="Cancelled Guests" value={cancelledGuests.length} color="red" />
         </div>
 
-        <GuestTable title="Current Guests" guests={currentGuests} onViewMore={setSelectedGuest} />
-        <GuestTable title="Completed Guests" guests={completedGuests} onViewMore={setSelectedGuest} />
-        <GuestTable title="Cancelled Guests" guests={cancelledGuests} onViewMore={setSelectedGuest} />
+        <GuestTable
+          title="All Guests"
+          guests={filteredGuests}
+          onViewMore={setSelectedGuest}
+        />
 
         {selectedGuest && (
           <GuestDetailsModal

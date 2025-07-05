@@ -5,8 +5,6 @@ import {
   FaHome,
   FaFileAlt,
   FaUsers,
-  FaReceipt,
-  FaChartBar,
 } from 'react-icons/fa';
 
 const tabs = [
@@ -14,8 +12,6 @@ const tabs = [
   { label: 'Properties', icon: <FaHome />, path: '/dashboard/properties' },
   { label: 'Bookings', icon: <FaFileAlt />, path: '/dashboard/bookings' },
   { label: 'Guests', icon: <FaUsers />, path: '/dashboard/guests' },
-  { label: 'Invoices', icon: <FaReceipt />, path: '/dashboard/invoices' },
-  { label: 'Reports', icon: <FaChartBar />, path: '/dashboard/reports' },
 ];
 
 export default function DashboardTabs() {
